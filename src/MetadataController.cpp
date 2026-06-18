@@ -206,52 +206,61 @@ bool MetadataController::save()
         return false;
     }
 
-    TagLib::MPEG::File file(QFile::encodeName(m_filePath).constData(), /*readProperties=*/false);
-    if (!file.isValid()) {
-        const QString msg = tr("Could not open file for writing.");
-        setStatus(Status::Error, msg);
-        emit saveError(msg);
-        return false;
-    }
-
-    TagLib::ID3v2::Tag *tag = file.ID3v2Tag(/*create=*/true);
-
-    tag->setTitle(toTagString(m_title));
-    tag->setArtist(toTagString(m_artist));
-    tag->setAlbum(toTagString(m_album));
-    tag->setGenre(toTagString(m_genre));
-    tag->setComment(toTagString(m_comment));
-    tag->setYear(m_year.toUInt());     // 0 (empty/invalid) clears the frame
-    tag->setTrack(m_trackNumber.toUInt());
-
-    writeTextFrame(tag, "TPE2", m_albumArtist);
-    writeTextFrame(tag, "TCOM", m_composer);
-    writeTextFrame(tag, "TPOS", m_discNumber);
-
-    // Only touch the picture frame if the user replaced or removed the art,
-    // so we never re-encode existing artwork needlessly.
-    if (m_coverDirty) {
-        tag->removeFrames("APIC");
-        if (!m_coverData.isEmpty()) {
-            auto *pic = new TagLib::ID3v2::AttachedPictureFrame();
-            pic->setMimeType(toTagString(m_coverMime));
-            pic->setType(TagLib::ID3v2::AttachedPictureFrame::FrontCover);
-            pic->setDescription("Cover");
-            pic->setPicture(TagLib::ByteVector(m_coverData.constData(),
-                                               static_cast<unsigned int>(m_coverData.size())));
-            tag->addFrame(pic);
+    // The TagLib file is opened inside this nested scope on purpose: its
+    // destructor closes the underlying OS file handle, and that MUST happen
+    // before we try to rename the file below. On Windows, TagLib opens the
+    // file with FILE_SHARE_READ | FILE_SHARE_WRITE but *not* FILE_SHARE_DELETE,
+    // so the OS refuses to rename/move a file while the handle is still open
+    // (ERROR_SHARING_VIOLATION). POSIX (macOS/Linux) allows renaming an open
+    // file, which is why renaming worked everywhere except Windows.
+    {
+        TagLib::MPEG::File file(QFile::encodeName(m_filePath).constData(), /*readProperties=*/false);
+        if (!file.isValid()) {
+            const QString msg = tr("Could not open file for writing.");
+            setStatus(Status::Error, msg);
+            emit saveError(msg);
+            return false;
         }
-    }
 
-    const bool ok = file.save(TagLib::MPEG::File::ID3v2,
-                              TagLib::File::StripOthers,
-                              TagLib::ID3v2::v4);
-    if (!ok) {
-        const QString msg = tr("Failed to write tags to disk.");
-        setStatus(Status::Error, msg);
-        emit saveError(msg);
-        return false;
-    }
+        TagLib::ID3v2::Tag *tag = file.ID3v2Tag(/*create=*/true);
+
+        tag->setTitle(toTagString(m_title));
+        tag->setArtist(toTagString(m_artist));
+        tag->setAlbum(toTagString(m_album));
+        tag->setGenre(toTagString(m_genre));
+        tag->setComment(toTagString(m_comment));
+        tag->setYear(m_year.toUInt());     // 0 (empty/invalid) clears the frame
+        tag->setTrack(m_trackNumber.toUInt());
+
+        writeTextFrame(tag, "TPE2", m_albumArtist);
+        writeTextFrame(tag, "TCOM", m_composer);
+        writeTextFrame(tag, "TPOS", m_discNumber);
+
+        // Only touch the picture frame if the user replaced or removed the art,
+        // so we never re-encode existing artwork needlessly.
+        if (m_coverDirty) {
+            tag->removeFrames("APIC");
+            if (!m_coverData.isEmpty()) {
+                auto *pic = new TagLib::ID3v2::AttachedPictureFrame();
+                pic->setMimeType(toTagString(m_coverMime));
+                pic->setType(TagLib::ID3v2::AttachedPictureFrame::FrontCover);
+                pic->setDescription("Cover");
+                pic->setPicture(TagLib::ByteVector(m_coverData.constData(),
+                                                   static_cast<unsigned int>(m_coverData.size())));
+                tag->addFrame(pic);
+            }
+        }
+
+        const bool ok = file.save(TagLib::MPEG::File::ID3v2,
+                                  TagLib::File::StripOthers,
+                                  TagLib::ID3v2::v4);
+        if (!ok) {
+            const QString msg = tr("Failed to write tags to disk.");
+            setStatus(Status::Error, msg);
+            emit saveError(msg);
+            return false;
+        }
+    } // TagLib file handle closed here, so the rename below can succeed on Windows.
 
     // Tags are written; now rename the file on disk if the user changed its
     // name. Done last so the tagged content moves with the new name.
@@ -289,8 +298,16 @@ bool MetadataController::renameOnDiskIfNeeded()
         return true; // unchanged
 
     const QString newPath = current.absoluteDir().filePath(desired);
-    if (QFile::exists(newPath))
+
+    // Refuse only if a *different* file already occupies the target name. On
+    // case-insensitive filesystems (Windows, default macOS) a case-only rename
+    // such as "song.mp3" -> "Song.mp3" reports the destination as already
+    // existing even though it is the very file we're renaming; allow that
+    // through instead of failing with a misleading "name already in use".
+    const QFileInfo target(newPath);
+    if (target.exists() && target.canonicalFilePath() != current.canonicalFilePath())
         return false;
+
     if (!QFile::rename(m_filePath, newPath))
         return false;
 

@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Main.qml</file>
+        <file>qml/components/Theme.qml</file>
+        <file>qml/components/Card.qml</file>
+        <file>qml/components/EditField.qml</file>
+        <file>qml/components/AccentButton.qml</file>
+        <file>qml/components/AlbumArtView.qml</file>
+        <file>qml/components/SaveButton.qml</file>
+    </qresource>
+</RCC>

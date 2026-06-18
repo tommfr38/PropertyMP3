@@ -1,0 +1,9 @@
+-rootPath
+/Users/tomi/Desktop/Code_Projects/PropertyMP3
+-cmake-output
+-output-file
+/Users/tomi/Desktop/Code_Projects/PropertyMP3/build/.qt/qml_imports/PropertyMP3_build.cmake
+-importPath
+/Users/tomi/Desktop/Code_Projects/PropertyMP3/build
+-importPath
+/opt/homebrew/opt/qt/share/qt/qml

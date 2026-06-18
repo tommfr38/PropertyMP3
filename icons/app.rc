@@ -1,0 +1,3 @@
+// Windows resource script: embeds the application icon into the .exe.
+// The path is relative to this file, so PropertyMP3.ico must sit next to it.
+IDI_ICON1 ICON "PropertyMP3.ico"

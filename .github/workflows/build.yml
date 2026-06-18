@@ -69,6 +69,10 @@ jobs:
         with:
           version: "6.7.3"
           arch: win64_msvc2019_64
+          # qt5compat is an optional add-on (not in the base install) but the UI
+          # imports Qt5Compat.GraphicalEffects; without it the QML fails to load
+          # and the app exits immediately. macOS's Homebrew Qt bundles it already.
+          modules: qt5compat
 
       # The Windows runner ships vcpkg at $VCPKG_INSTALLATION_ROOT; use it to
       # provide TagLib (and its zlib dependency) as a CMake config package.

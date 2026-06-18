@@ -1,10 +1,12 @@
 import QtQuick
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 
 /*
  * Large, rounded album-art display.
  *
- *  - Rounded corners are produced with an OpacityMask.
+ *  - Rounded corners are produced by masking with a MultiEffect (QtQuick.Effects,
+ *    a base Qt 6 module) rather than Qt5Compat.GraphicalEffects' OpacityMask, so
+ *    the Windows build no longer needs the fragile Qt5Compat add-on.
  *  - Replacing the art cross-fades between two stacked Image layers.
  *  - The user can click the art or drop a JPG/PNG onto it to replace it.
  */
@@ -53,7 +55,10 @@ Item {
         anchors.fill: parent
 
         layer.enabled: true
-        layer.effect: OpacityMask { maskSource: maskRect }
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: maskRect
+        }
 
         Rectangle {
             anchors.fill: parent
@@ -83,12 +88,15 @@ Item {
         }
     }
 
-    // Mask defining the rounded shape (not drawn directly).
+    // Mask defining the rounded shape (not drawn directly). MultiEffect.maskSource
+    // requires a texture provider, so layer.enabled is set (unlike the old
+    // OpacityMask, which accepted a plain invisible item).
     Rectangle {
         id: maskRect
         anchors.fill: parent
         radius: theme.radiusLarge
         visible: false
+        layer.enabled: true
     }
 
     // --- Placeholder shown when there is no cover --------------------------

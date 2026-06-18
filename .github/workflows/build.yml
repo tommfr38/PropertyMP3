@@ -69,12 +69,14 @@ jobs:
         with:
           version: "6.7.3"
           arch: win64_msvc2019_64
-          # The UI imports Qt5Compat.GraphicalEffects, an optional add-on not in
-          # the base install; without it the QML fails to load and the app exits
-          # immediately. It in turn pulls in Qt6ShaderTools.dll (from qtshadertools)
-          # at runtime, so that module is required too. macOS's Homebrew Qt bundles
-          # both already.
-          modules: qt5compat qtshadertools
+          # The UI's rounded album art and card shadows use QtQuick.Effects
+          # (MultiEffect) — part of the base Qt install, with pre-baked shaders, so
+          # no extra add-on is needed. We deliberately do NOT use
+          # Qt5Compat.GraphicalEffects (an optional add-on that failed to load on
+          # Windows and made the app exit immediately with code -1).
+          # qtshadertools (Qt6ShaderTools.dll) is kept only as a safety net; nothing
+          # we ship is known to require it, so it can likely be dropped later.
+          modules: qtshadertools
 
       # The Windows runner ships vcpkg at $VCPKG_INSTALLATION_ROOT; use it to
       # provide TagLib (and its zlib dependency) as a CMake config package.
@@ -104,8 +106,38 @@ jobs:
           windeployqt --release --compiler-runtime --qmldir "$PWD\qml" build\Release\PropertyMP3.exe
           Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\*.dll" `
             -Destination build\Release\
+          # Make the headless 'offscreen' platform plugin available for the smoke
+          # test below (windeployqt deploys qwindows but not always qoffscreen).
+          New-Item -ItemType Directory -Force build\Release\platforms | Out-Null
+          Copy-Item "$env:QT_ROOT_DIR\plugins\platforms\qoffscreen.dll" `
+            -Destination build\Release\platforms\ -ErrorAction SilentlyContinue
+          Write-Host "===== Deployed tree (build\Release) ====="
+          Get-ChildItem -Recurse build\Release |
+            ForEach-Object { $_.FullName.Replace((Join-Path $PWD 'build\Release\'), '') }
+
+      # Headless smoke test of the DEPLOYED exe. If any QML import/module is
+      # missing, main.cpp's objectCreationFailed handler exits immediately with
+      # code -1 (shown as 4294967295). We launch with the offscreen platform and
+      # check the process stays alive briefly (= the whole QML graph loaded).
+      # Informational only (continue-on-error) so it can never block producing the
+      # downloadable artifact; the verdict surfaces as a GitHub annotation.
+      - name: Smoke test deployed app (headless)
+        continue-on-error: true
+        shell: pwsh
+        working-directory: build/Release
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $p = Start-Process -FilePath ".\PropertyMP3.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) {
+            Write-Host "::error::Smoke test FAILED: PropertyMP3.exe exited early with code $($p.ExitCode). Code -1 (4294967295) means a QML import/module failed to load at runtime."
+            exit 1
+          }
+          Write-Host "Smoke test PASSED: app still running after 8s (QML and all modules loaded)."
+          Stop-Process -Id $p.Id -Force
 
       - name: Upload Windows artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: PropertyMP3-windows

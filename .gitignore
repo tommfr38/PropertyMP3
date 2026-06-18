@@ -1,0 +1,23 @@
+# Build output
+/build/
+build*/
+*.app/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Qt / moc / qrc generated
+*.moc
+moc_*.cpp
+qrc_*.cpp
+*.qmlc
+*.jsc
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.user

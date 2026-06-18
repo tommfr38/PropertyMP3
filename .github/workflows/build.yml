@@ -1,0 +1,125 @@
+name: Build
+
+# Builds the macOS .app (as a .dmg) and the Windows .exe (zipped with its Qt
+# runtime). Runs on every push/PR; when you push a version tag like `v1.0.0`
+# it also publishes a GitHub Release with both artifacts attached.
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS: build the .app, bundle Qt + QML into it with macdeployqt, ship a .dmg
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS (.app / .dmg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Qt and TagLib from Homebrew. CMakeLists.txt already auto-detects the
+      # Homebrew Qt prefix (/opt/homebrew/opt/qt), and brew's taglib 2.x ships a
+      # CMake config package, so no extra flags are needed.
+      - name: Install Qt and TagLib
+        run: brew install qt taglib
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # macdeployqt copies the Qt frameworks and the QML modules used by our
+      # .qml files into the bundle and produces a self-contained .dmg.
+      - name: Bundle Qt runtime and create DMG
+        run: |
+          "$(brew --prefix qt)/bin/macdeployqt" build/PropertyMP3.app \
+            -qmldir="$PWD/qml" -dmg
+          mv build/PropertyMP3.dmg build/PropertyMP3-macos.dmg
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PropertyMP3-macos
+          path: build/PropertyMP3-macos.dmg
+
+  # ---------------------------------------------------------------------------
+  # Windows: build the .exe, embed the .ico (via app.rc), deploy Qt + QML next
+  # to it with windeployqt, and copy the TagLib runtime DLLs alongside.
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.3"
+          arch: win64_msvc2019_64
+
+      # The Windows runner ships vcpkg at $VCPKG_INSTALLATION_ROOT; use it to
+      # provide TagLib (and its zlib dependency) as a CMake config package.
+      - name: Install TagLib (vcpkg)
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install taglib:x64-windows
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # windeployqt copies Qt DLLs + QML modules next to the exe; then bring in
+      # the vcpkg runtime DLLs (tag.dll, zlib1.dll, ...).
+      - name: Deploy Qt runtime and TagLib DLLs
+        shell: pwsh
+        run: |
+          windeployqt --release --qmldir "$PWD\qml" build\Release\PropertyMP3.exe
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\*.dll" `
+            -Destination build\Release\
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PropertyMP3-windows
+          path: build/Release/
+
+  # ---------------------------------------------------------------------------
+  # On a version tag, attach both builds to a GitHub Release.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      # Zip the Windows folder so the release has a single downloadable file.
+      - name: Zip Windows build
+        run: |
+          cd dist/PropertyMP3-windows
+          zip -r ../PropertyMP3-windows.zip .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/PropertyMP3-macos/PropertyMP3-macos.dmg
+            dist/PropertyMP3-windows.zip

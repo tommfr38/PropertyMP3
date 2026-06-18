@@ -33,12 +33,20 @@ jobs:
         run: cmake --build build --config Release
 
       # macdeployqt copies the Qt frameworks and the QML modules used by our
-      # .qml files into the bundle and produces a self-contained .dmg.
-      - name: Bundle Qt runtime and create DMG
+      # .qml files into the bundle. It rewrites those frameworks' load paths
+      # but does NOT re-sign them, which invalidates their signatures — on
+      # Apple Silicon that makes macOS report the downloaded app as "damaged".
+      # So ad-hoc re-sign the whole bundle, then build the DMG ourselves.
+      # (Users still see a one-time "unidentified developer" prompt: right-click
+      # the app -> Open, since there is no paid Apple Developer signing cert.)
+      - name: Bundle Qt runtime, ad-hoc sign, and create DMG
         run: |
           "$(brew --prefix qt)/bin/macdeployqt" build/PropertyMP3.app \
-            -qmldir="$PWD/qml" -dmg
-          mv build/PropertyMP3.dmg build/PropertyMP3-macos.dmg
+            -qmldir="$PWD/qml"
+          codesign --force --deep --sign - build/PropertyMP3.app
+          codesign --verify --deep --strict build/PropertyMP3.app
+          hdiutil create -volname PropertyMP3 -srcfolder build/PropertyMP3.app \
+            -fs HFS+ -format UDZO -ov build/PropertyMP3-macos.dmg
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4

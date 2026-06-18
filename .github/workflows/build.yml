@@ -88,12 +88,14 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      # windeployqt copies Qt DLLs + QML modules next to the exe; then bring in
-      # the vcpkg runtime DLLs (tag.dll, zlib1.dll, ...).
+      # windeployqt copies Qt DLLs + QML modules next to the exe. --compiler-runtime
+      # also bundles the MSVC C++ runtime (vcruntime140.dll, msvcp140.dll, ...);
+      # without it the app fails to launch on PCs that lack the VC++ Redistributable.
+      # Then bring in the vcpkg runtime DLLs (tag.dll, z.dll, ...).
       - name: Deploy Qt runtime and TagLib DLLs
         shell: pwsh
         run: |
-          windeployqt --release --qmldir "$PWD\qml" build\Release\PropertyMP3.exe
+          windeployqt --release --compiler-runtime --qmldir "$PWD\qml" build\Release\PropertyMP3.exe
           Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\*.dll" `
             -Destination build\Release\
 

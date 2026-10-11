@@ -1,6 +1,6 @@
 import QtQuick
 
-// Central palette + metrics for the Spotify-inspired dark theme.
+// Central palette + metrics for the dark theme.
 // Instantiated locally in components that need it: `Theme { id: theme }`.
 QtObject {
     readonly property color background:   "#121212"

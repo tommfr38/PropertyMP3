@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     QGuiApplication::setOrganizationName(QStringLiteral("PropertyMP3"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("PropertyMP3"));
 
-    // Use the Basic style so our custom Spotify-dark colours are not overridden
+    // Use the Basic style so our custom dark colours are not overridden
     // by a platform style.
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 

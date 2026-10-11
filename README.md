@@ -1,8 +1,7 @@
 # PropertyMP3
 
-A desktop MP3 metadata editor with a Spotify-inspired dark UI. Edit the ID3
-tags of your local MP3 files so they display correctly when added as **local
-files** in Spotify.
+A desktop MP3 metadata editor with a dark UI. Edit the ID3 tags of your local
+MP3 files so they display correctly in any music player.
 
 Built with **C++17 + Qt 6 (QML)** for the interface and **TagLib** for reading
 and writing ID3v2 tags.
@@ -122,6 +121,6 @@ window. On macOS, the equivalent bundling step is `macdeployqt PropertyMP3.app`.
 ## Notes
 
 - Files are always written as **ID3v2.4** and other tag types (e.g. ID3v1) are
-  stripped, which is the format Spotify reads most reliably.
+  stripped, which is the format most players read most reliably.
 - Album art is stored as a single **front-cover** APIC frame; existing artwork
   is only re-encoded if you actually change it.

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(PropertyMP3
     VERSION 1.0.0
-    DESCRIPTION "Spotify-style MP3 metadata editor"
+    DESCRIPTION "Desktop MP3 metadata editor"
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
